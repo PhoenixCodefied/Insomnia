@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let locationPermission: LocationPermission
     let loginItem = LoginItem()
     let releases = ReleaseChecker()
+    let scheduled: ScheduledRunner
     private var statusItem: StatusItemController?
     private var settingsWindow: SettingsWindow?
     private var terminating = false
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         let manager = SessionManager.live()
         self.manager = manager
+        scheduled = ScheduledRunner(manager: manager)
         secrets = KeychainHotspotSecretStore(keychain: KeychainStore()) {
             manager.config.hotspotSSID
         }
@@ -71,14 +73,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Log.error("could not save config after the launch at login check: \(error.localizedDescription)")
             }
         }
-        let settings = SettingsWindow { [manager, secrets, locationPermission, loginItem, releases] in
+        let settings = SettingsWindow { [manager, secrets, locationPermission, loginItem, releases, scheduled] in
             AnyView(
                 SettingsView(
                     manager: manager,
                     secrets: secrets,
                     locationPermission: locationPermission,
                     loginItem: loginItem,
-                    releases: releases
+                    releases: releases,
+                    scheduled: scheduled
                 )
             )
         }
@@ -86,7 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = StatusItemController(manager: manager, status: status) { [weak settings] in
             settings?.show()
         }
-        Task { await manager.reconcile() }
+        Task {
+            await manager.reconcile()
+            // After reconcile, so a run resumed after a relaunch sees the
+            // session reconcile restored.
+            scheduled.start()
+        }
     }
 
     /// Quitting always ends the session (spec 1). Terminate is deferred until

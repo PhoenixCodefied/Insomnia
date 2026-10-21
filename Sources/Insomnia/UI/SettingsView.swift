@@ -11,6 +11,8 @@ struct SettingsView: View {
     let loginItem: LoginItem
     /// The "Check for updates" button's one request and its report.
     let releases: ReleaseChecker
+    /// The daily wake for scheduled jobs.
+    let scheduled: ScheduledRunner
 
     @State private var newPreset = ""
     @State private var presetError: String?
@@ -23,10 +25,13 @@ struct SettingsView: View {
     /// Names of the apps the automatic lid-close scope would freeze right
     /// now (the freeze list excluded); refreshed on appear and toggle.
     @State private var wouldFreeze: [String] = []
+    /// The result of "Test the check", shown under it.
+    @State private var checkResult: String?
 
     var body: some View {
         Form {
             sessionSection
+            wakeSection
             lidSection
             agentSection
             powerSection
@@ -93,6 +98,139 @@ struct SettingsView: View {
 
     private var endFloor: Binding<Int> {
         Binding(get: { manager.config.endFloor }, set: { v in update { $0.setEndFloor(v) } })
+    }
+
+    // MARK: Scheduled wake
+
+    /// A schedule field. Fields macOS keeps (on/off, time, days) hand the
+    /// new wake to pmset at once; the rest only change what Insomnia does.
+    private func bindWake<T: Equatable>(_ keyPath: WritableKeyPath<WakeSchedule, T>, reapply: Bool) -> Binding<T> {
+        Binding(
+            get: { manager.config.wakeSchedule[keyPath: keyPath] },
+            set: { value in
+                guard manager.config.wakeSchedule[keyPath: keyPath] != value else { return }
+                update { $0.wakeSchedule[keyPath: keyPath] = value }
+                if reapply { scheduled.scheduleChanged() }
+            }
+        )
+    }
+
+    private func clockBinding(_ keyPath: WritableKeyPath<WakeSchedule, Int>, reapply: Bool) -> Binding<Date> {
+        let minutes = bindWake(keyPath, reapply: reapply)
+        return Binding(
+            get: {
+                Calendar.current.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: Date()) ?? Date()
+            },
+            set: { date in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+                minutes.wrappedValue = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            }
+        )
+    }
+
+    private func dayBinding(_ letter: Character) -> Binding<Bool> {
+        let days = bindWake(\.days, reapply: true)
+        return Binding(
+            get: { manager.config.wakeSchedule.normalizedDays.contains(letter) },
+            set: { on in
+                var set = Set(manager.config.wakeSchedule.normalizedDays)
+                if on { set.insert(letter) } else { set.remove(letter) }
+                days.wrappedValue = String(WakeSchedule.pmsetOrder.filter { set.contains($0) })
+            }
+        )
+    }
+
+    private static let dayNames: [(Character, String)] = [("M", "Mon"), ("T", "Tue"), ("W", "Wed"), ("R", "Thu"), ("F", "Fri"), ("S", "Sat"), ("U", "Sun")]
+
+    private var minutesBinding: (WritableKeyPath<WakeSchedule, TimeInterval>) -> Binding<Int> {
+        { keyPath in
+            let seconds = bindWake(keyPath, reapply: false)
+            return Binding(get: { Int(seconds.wrappedValue / 60) }, set: { seconds.wrappedValue = TimeInterval($0 * 60) })
+        }
+    }
+
+    private var wakeSection: some View {
+        let s = manager.config.wakeSchedule
+        return Section {
+            Toggle("Wake this Mac on a schedule, even with the lid closed", isOn: bindWake(\.enabled, reapply: true))
+            if s.enabled {
+                DatePicker("Wake at", selection: clockBinding(\.wakeAt, reapply: true), displayedComponents: .hourAndMinute)
+                HStack {
+                    Text("On")
+                    Spacer()
+                    ForEach(Self.dayNames, id: \.0) { letter, name in
+                        Toggle(name, isOn: dayBinding(letter))
+                            .toggleStyle(.button)
+                    }
+                }
+                DatePicker("Stay awake at most until", selection: clockBinding(\.latestEnd, reapply: false), displayedComponents: .hourAndMinute)
+                Picker("Done when", selection: bindWake(\.check.kind, reapply: false)) {
+                    Text("Never (stay awake until the latest end)").tag(DoneCheck.Kind.none)
+                    Text("A command succeeds").tag(DoneCheck.Kind.command)
+                    Text("A file changes after the wake").tag(DoneCheck.Kind.file)
+                    Text("These processes have finished").tag(DoneCheck.Kind.processesGone)
+                }
+                if s.check.kind != .none {
+                    TextField(checkPlaceholder(s.check.kind), text: bindWake(\.check.value, reapply: false), axis: .vertical)
+                        .font(.system(.body, design: .monospaced))
+                        .textFieldStyle(.roundedBorder)
+                    Stepper(value: minutesBinding(\.checkEvery), in: 1...30) {
+                        LabeledContent("Check every", value: "\(Int(s.checkEvery / 60)) min")
+                    }
+                    Stepper(value: minutesBinding(\.grace), in: 0...60) {
+                        LabeledContent("Then wait", value: "\(Int(s.grace / 60)) min")
+                    }
+                    HStack {
+                        Button("Test the check") { testCheck() }
+                            .disabled(s.check.problem != nil)
+                        if let checkResult {
+                            Text(checkResult).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let problem = s.problem {
+                    Text(problem).font(.caption).foregroundStyle(.orange)
+                }
+            }
+            if let error = scheduled.lastError {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                if let next = scheduled.nextWake {
+                    Text("Next wake: \(next.formatted(.dateTime.weekday(.abbreviated).day().month().hour().minute()))")
+                }
+                Text("macOS has on file: \(scheduled.systemWake ?? "no repeating wake")")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+        } header: {
+            Text("Scheduled wake")
+        } footer: {
+            Text("macOS wakes the Mac at this time and Insomnia starts a session that lasts until the jobs are done or the latest end, whichever comes first. The lid-close actions, battery and heat rules apply as in any session. A locked screen stays locked: jobs that need the screen still cannot run. macOS keeps one repeating wake, so this replaces any you set with pmset repeat.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func checkPlaceholder(_ kind: DoneCheck.Kind) -> String {
+        switch kind {
+        case .none: ""
+        case .command: "Command that exits 0 when the jobs are done"
+        case .file: "File path, e.g. ~/Library/Logs/jobs-done"
+        case .processesGone: "Process names, comma-separated"
+        }
+    }
+
+    private func testCheck() {
+        let check = manager.config.wakeSchedule.check
+        checkResult = "Checking…"
+        Task {
+            // As if the wake was at midnight today, so a file check counts
+            // any change since then and a process check is not held back.
+            let midnight = Calendar.current.startOfDay(for: Date())
+            let passes = await DoneChecker.passes(check, since: midnight, now: Date().addingTimeInterval(DoneCheck.processesSettle))
+            checkResult = passes ? "Passes now: the jobs count as done." : "Does not pass yet."
+        }
     }
 
     // MARK: Sections

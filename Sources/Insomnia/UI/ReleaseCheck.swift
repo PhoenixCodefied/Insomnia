@@ -248,9 +248,9 @@ protocol ReleaseFetching: Sendable {
 /// names. Each request carries the installed version as its user agent and
 /// nothing else about the Mac.
 struct GitHubReleaseFetcher: ReleaseFetching {
-    static let releasesPage = URL(string: "https://github.com/krishhgg/Insomnia/releases")!
-    static let latestEndpoint = URL(string: "https://api.github.com/repos/krishhgg/Insomnia/releases/latest")!
-    static let listEndpoint = URL(string: "https://api.github.com/repos/krishhgg/Insomnia/releases?per_page=30")!
+    static let releasesPage = URL(string: "https://github.com/PhoenixCodefied/Insomnia/releases")!
+    static let latestEndpoint = URL(string: "https://api.github.com/repos/PhoenixCodefied/Insomnia/releases/latest")!
+    static let listEndpoint = URL(string: "https://api.github.com/repos/PhoenixCodefied/Insomnia/releases?per_page=30")!
     static let timeout: TimeInterval = 15
 
     /// The session's configuration, made fresh for each request. Tests pass

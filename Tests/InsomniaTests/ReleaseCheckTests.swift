@@ -244,9 +244,9 @@ final class ReleaseCheckTests: XCTestCase {
     }
 
     func testTheRequestsAreUnauthenticatedGetsOfTheTwoEndpoints() {
-        XCTAssertEqual(GitHubReleaseFetcher.latestEndpoint.absoluteString, "https://api.github.com/repos/krishhgg/Insomnia/releases/latest")
-        XCTAssertEqual(GitHubReleaseFetcher.listEndpoint.absoluteString, "https://api.github.com/repos/krishhgg/Insomnia/releases?per_page=30")
-        XCTAssertEqual(GitHubReleaseFetcher.releasesPage.absoluteString, "https://github.com/krishhgg/Insomnia/releases")
+        XCTAssertEqual(GitHubReleaseFetcher.latestEndpoint.absoluteString, "https://api.github.com/repos/PhoenixCodefied/Insomnia/releases/latest")
+        XCTAssertEqual(GitHubReleaseFetcher.listEndpoint.absoluteString, "https://api.github.com/repos/PhoenixCodefied/Insomnia/releases?per_page=30")
+        XCTAssertEqual(GitHubReleaseFetcher.releasesPage.absoluteString, "https://github.com/PhoenixCodefied/Insomnia/releases")
 
         for url in [GitHubReleaseFetcher.latestEndpoint, GitHubReleaseFetcher.listEndpoint] {
             let request = GitHubReleaseFetcher.request(url, installed: installed)

@@ -39,6 +39,10 @@
   <img src="docs/assets/session-flow.svg" alt="Illustrated menu-bar controls: enter Days, Hours, and Minutes, watch the countdown, and hold the end control to finish early. Click the eye or countdown to add time. Closing the lid is optional, and incomplete recovery needs attention." width="880">
 </p>
 
+> **This fork** adds [Scheduled wake](docs/scheduled-wake.md): wake the Mac at
+> a set time, even with the lid closed, and keep it awake until scheduled jobs
+> are done. Builds come from this fork's releases.
+
 ## Install
 
 Requires macOS 26 or later on an Apple Silicon Mac.

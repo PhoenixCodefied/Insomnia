@@ -419,6 +419,48 @@ else
   exit 1
 fi
 
+# 2b. Scheduled-wake helper ----------------------------------------------------
+#    Optional: the app keeps every other feature without it. The helper is
+#    copied out of the checked bundle to a root-owned directory, and its own
+#    sudoers file lets this user run only that helper (which accepts only
+#    `set <days> <HH:MM:00>` and `clear`). A directory on the way that is not
+#    root-owned, or that others can write to, could swap the helper, so the
+#    step is skipped then and the app reports the helper as missing.
+WAKE_HELPER_SRC="$SOURCE_APP/Contents/Resources/insomnia-wake"
+WAKE_DIR=/usr/local/libexec
+WAKE_HELPER="$WAKE_DIR/insomnia-wake"
+WAKE_SUDOERS=/etc/sudoers.d/insomnia-wake
+wake_dir_safe() { # dir: absent, or a root-owned directory nobody else can write
+  local dir="$1" owner mode
+  [[ -e "$dir" ]] || return 0
+  [[ -d "$dir" && ! -L "$dir" ]] || return 1
+  owner="$(/usr/bin/stat -f %u "$dir")"
+  mode="$(/usr/bin/stat -f %Lp "$dir")"
+  [[ "$owner" == 0 ]] || return 1
+  (( (8#$mode & 8#022) == 0 ))
+}
+if [[ -f "$WAKE_HELPER_SRC" ]]; then
+  step "Installing the scheduled-wake helper ($WAKE_HELPER)"
+  if wake_dir_safe /usr/local && wake_dir_safe "$WAKE_DIR"; then
+    TMP_WAKE_SUDOERS="$("$MKTEMP")"
+    cat > "$TMP_WAKE_SUDOERS" <<SUDO
+# Installed by Insomnia install.sh: the scheduled-wake helper, nothing else.
+$USER ALL=(root) NOPASSWD: $WAKE_HELPER
+SUDO
+    if "$SUDO" install -d -o root -g wheel -m 0755 "$WAKE_DIR" &&
+       "$SUDO" install -o root -g wheel -m 0755 "$WAKE_HELPER_SRC" "$WAKE_HELPER" &&
+       "$SUDO" visudo -cf "$TMP_WAKE_SUDOERS" >/dev/null &&
+       "$SUDO" install -m 0440 -o root -g wheel "$TMP_WAKE_SUDOERS" "$WAKE_SUDOERS"; then
+      echo "scheduled-wake helper installed"
+    else
+      echo "WARNING: the scheduled-wake helper could not be installed; Scheduled wake stays unavailable. Everything else is unaffected." >&2
+    fi
+    "$RM" -f "$TMP_WAKE_SUDOERS"
+  else
+    echo "WARNING: /usr/local or $WAKE_DIR is not a root-owned directory closed to other users, so the scheduled-wake helper was not installed. Everything else is unaffected." >&2
+  fi
+fi
+
 # 3. Bundle ------------------------------------------------------------------
 #    Copied into a staging directory inside $APP_DIR. $APP itself is
 #    replaced in step 6, in the same locked step as the LaunchAgent: the

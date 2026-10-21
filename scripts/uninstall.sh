@@ -981,6 +981,16 @@ if [[ -e "$SUDOERS" ]] || "$SUDO" test -e "$SUDOERS"; then
   "$SUDO" rm -f "$SUDOERS"
 fi
 
+step "Removing the scheduled-wake helper (requires your password)"
+# Clears the repeating wake first: macOS would otherwise keep waking the Mac.
+if [[ -x /usr/local/libexec/insomnia-wake ]]; then
+  "$SUDO" /usr/local/libexec/insomnia-wake clear || true
+  "$SUDO" rm -f /usr/local/libexec/insomnia-wake
+fi
+if [[ -e /etc/sudoers.d/insomnia-wake ]] || "$SUDO" test -e /etc/sudoers.d/insomnia-wake; then
+  "$SUDO" rm -f /etc/sudoers.d/insomnia-wake
+fi
+
 step "Removing app bundle"
 "$RM" -rf "$APP"
 # install.sh's leftovers beside the bundle, by the exact names it gives them.

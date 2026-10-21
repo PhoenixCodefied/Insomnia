@@ -127,6 +127,10 @@ step "Assembling $APP"
 # bundle and only then runs this copy; an edited script fails that check.
 "$CP" "$ROOT/scripts/backstop.sh" "$APP/Contents/Resources/backstop.sh"
 "$CHMOD" 755 "$APP/Contents/Resources/backstop.sh"
+# The scheduled-wake helper, sealed the same way. install.sh copies it out
+# to /usr/local/libexec as root; the copy there is what sudo runs.
+"$CP" "$ROOT/scripts/insomnia-wake.sh" "$APP/Contents/Resources/insomnia-wake"
+"$CHMOD" 755 "$APP/Contents/Resources/insomnia-wake"
 "$PLUTIL" -lint "$APP/Contents/Info.plist" >/dev/null
 
 # 3. Sign --------------------------------------------------------------------

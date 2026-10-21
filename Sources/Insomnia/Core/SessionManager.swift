@@ -19,6 +19,8 @@ enum EndReason: String, Sendable {
     /// may still have been applied, so the start is undone from the journal
     /// like an end rather than rolled back from memory.
     case startFailed
+    /// A scheduled wake's done check passed (and its grace period ran out).
+    case jobsDone
 }
 
 /// What `end` achieved. Callers that are about to quit need to know whether
@@ -3185,6 +3187,7 @@ final class SessionManager {
             : "A previous session left changes behind; everything has been undone."
         case .recoveryUnavailable: "Insomnia could not arm its recovery agent for the session found on disk, so it ended the session. Sleep is back to normal."
         case .startFailed: "Insomnia could not disable sleep, so no session was started. Sleep is back to normal."
+        case .jobsDone: "The scheduled jobs are done. Sleep is back to normal."
         }
     }
 }

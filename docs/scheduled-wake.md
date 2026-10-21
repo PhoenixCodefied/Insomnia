@@ -51,8 +51,14 @@ the power-on message.
 
 ## The helper
 
-pmset needs root to set a repeating wake. `install.sh` copies
-`insomnia-wake` out of the signed bundle to `/usr/local/libexec/insomnia-wake`
+pmset needs root to set a repeating wake. After `install.sh`, run once from a
+checkout of this fork:
+
+```bash
+scripts/install-wake-helper.sh
+```
+
+It copies `scripts/insomnia-wake.sh` to `/usr/local/libexec/insomnia-wake`
 (root-owned, mode 755) and adds `/etc/sudoers.d/insomnia-wake`, which lets
 your account run only that helper. The helper accepts exactly:
 
@@ -61,9 +67,10 @@ insomnia-wake set <days MTWRFSU> <HH:MM:00>
 insomnia-wake clear
 ```
 
-and refuses everything else. The install step is skipped if `/usr/local` or
-`/usr/local/libexec` is not root-owned or is writable by others; the rest of
-Insomnia is unaffected. `uninstall.sh` clears the wake and removes both files.
+and refuses everything else. The script refuses to install if `/usr/local`
+or `/usr/local/libexec` is not root-owned or is writable by others.
+`scripts/uninstall-wake-helper.sh` clears the wake and removes both files.
+`install.sh` and `uninstall.sh` are unchanged from upstream.
 
 macOS keeps one repeating wake: setting one replaces any repeating wake you
 set yourself with `pmset repeat`, and `clear` (turning the feature off)

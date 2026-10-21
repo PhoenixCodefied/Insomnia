@@ -27,7 +27,7 @@ struct PmsetWakeScheduler: WakeScheduling {
 
     func apply(_ schedule: WakeSchedule) async throws {
         guard Self.helperInstalled else {
-            throw WakeHelperError(detail: "The scheduled-wake helper is not installed. Run install.sh again.")
+            throw WakeHelperError(detail: "The scheduled-wake helper is not installed. Run scripts/install-wake-helper.sh from a checkout of this fork.")
         }
         let args: [String]
         if schedule.enabled, schedule.problem == nil {
